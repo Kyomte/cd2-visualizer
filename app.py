@@ -97,14 +97,16 @@ def bq(sql: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def overview_stats():
-    return bq(f"""
-        SELECT
-          (SELECT COUNT(*) FROM {BQ_PRE}.courses`        WHERE workflow_state = 'available') AS active_courses,
-          (SELECT COUNT(*) FROM {BQ_PRE}.users`           WHERE workflow_state = 'registered') AS active_users,
-          (SELECT COUNT(*) FROM {BQ_PRE}.learning_outcomes` WHERE workflow_state = 'active') AS active_outcomes,
-          (SELECT ROUND(COUNTIF(mastery='t') / COUNT(*) * 100, 1)
-           FROM {BQ_PRE}.learning_outcomes_results` WHERE workflow_state='active') AS mastery_pct
-    """)
+    active_courses  = bq(f"SELECT COUNT(*) AS n FROM {BQ_PRE}.courses` WHERE workflow_state='available'")['n'].iloc[0]
+    active_users    = bq(f"SELECT COUNT(*) AS n FROM {BQ_PRE}.users` WHERE workflow_state='registered'")['n'].iloc[0]
+    active_outcomes = bq(f"SELECT COUNT(*) AS n FROM {BQ_PRE}.learning_outcomes` WHERE workflow_state='active'")['n'].iloc[0]
+    mastery_pct     = bq(f"SELECT ROUND(COUNTIF(mastery='t')/COUNT(*)*100,1) AS n FROM {BQ_PRE}.learning_outcomes_results` WHERE workflow_state='active'")['n'].iloc[0]
+    return pd.DataFrame([{
+        "active_courses": active_courses,
+        "active_users": active_users,
+        "active_outcomes": active_outcomes,
+        "mastery_pct": mastery_pct,
+    }])
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def monthly_results():

@@ -78,16 +78,19 @@ st.markdown("""
 
 @st.cache_resource
 def get_client():
-    # On Streamlit Cloud: credentials come from st.secrets["gcp_service_account"]
-    # Locally: uses Application Default Credentials automatically
+    from google.oauth2 import service_account
     if "gcp_service_account" in st.secrets:
-        from google.oauth2 import service_account
         creds = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            dict(st.secrets["gcp_service_account"]),
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
         return bigquery.Client(project=PROJECT, credentials=creds)
-    return bigquery.Client(project=PROJECT)
+    # Local development — uses Application Default Credentials
+    try:
+        return bigquery.Client(project=PROJECT)
+    except Exception:
+        st.error("No GCP credentials found. Add `[gcp_service_account]` to your Streamlit secrets.")
+        st.stop()
 
 def bq(sql: str) -> pd.DataFrame:
     return get_client().query(sql).to_dataframe()

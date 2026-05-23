@@ -78,10 +78,12 @@ st.markdown("""
 
 @st.cache_resource
 def get_client():
+    import json
     from google.oauth2 import service_account
-    if "gcp_service_account" in st.secrets:
+    if "gcp_credentials_json" in st.secrets:
+        info = json.loads(st.secrets["gcp_credentials_json"])
         creds = service_account.Credentials.from_service_account_info(
-            dict(st.secrets["gcp_service_account"]),
+            info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
         return bigquery.Client(project=PROJECT, credentials=creds)
@@ -89,7 +91,7 @@ def get_client():
     try:
         return bigquery.Client(project=PROJECT)
     except Exception:
-        st.error("No GCP credentials found. Add `[gcp_service_account]` to your Streamlit secrets.")
+        st.error("Add `gcp_credentials_json` to your Streamlit secrets.")
         st.stop()
 
 def bq(sql: str) -> pd.DataFrame:

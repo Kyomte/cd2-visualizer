@@ -351,6 +351,9 @@ page = st.sidebar.radio(
     index=0,
 )
 
+st.sidebar.divider()
+st.sidebar.caption("Made by Kiel Mingote")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE: OVERVIEW

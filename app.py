@@ -143,6 +143,99 @@ def ratings_data():
     return bq(f"SELECT * FROM {BQ_PRE}.outcome_proficiencies_ratings`")
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def mastery_bands():
+    return bq(f"""
+        SELECT
+          CASE
+            WHEN percent >= 0.9 THEN 'Exceeds (90–100%)'
+            WHEN percent >= 0.7 THEN 'Meets (70–89%)'
+            WHEN percent >= 0.5 THEN 'Approaching (50–69%)'
+            ELSE 'Below (<50%)'
+          END AS band,
+          COUNT(*) AS n
+        FROM {BQ_PRE}.learning_outcomes_results`
+        WHERE workflow_state = 'active' AND percent IS NOT NULL
+        GROUP BY 1
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def mom_trend():
+    return bq(f"""
+        SELECT
+          DATE_TRUNC(DATE(assessed_at), MONTH) AS month,
+          COUNT(*) AS assessments,
+          ROUND(COUNTIF(mastery='t') / COUNT(*) * 100, 1) AS mastery_pct
+        FROM {BQ_PRE}.learning_outcomes_results`
+        WHERE workflow_state = 'active' AND assessed_at IS NOT NULL
+        GROUP BY 1 ORDER BY 1
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def at_risk_outcomes(min_assessments: int = 50):
+    return bq(f"""
+        SELECT
+          lo.display_name AS code,
+          lo.short_description AS outcome,
+          COUNT(r.id) AS assessments,
+          COUNT(DISTINCT r.user_id) AS students,
+          ROUND(COUNTIF(r.mastery='t') / COUNT(r.id) * 100, 1) AS mastery_rate,
+          ROUND(AVG(r.percent) * 100, 1) AS avg_score
+        FROM {BQ_PRE}.learning_outcomes_results` r
+        JOIN {BQ_PRE}.learning_outcomes` lo ON r.learning_outcome_id = lo.id
+        WHERE r.workflow_state = 'active'
+        GROUP BY 1, 2
+        HAVING assessments >= {min_assessments} AND mastery_rate < 70
+        ORDER BY mastery_rate ASC
+        LIMIT 30
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def outcome_volume_vs_mastery():
+    return bq(f"""
+        SELECT
+          lo.display_name AS code,
+          lo.short_description AS outcome,
+          COUNT(r.id) AS assessments,
+          COUNT(DISTINCT r.user_id) AS students,
+          ROUND(COUNTIF(r.mastery='t') / COUNT(r.id) * 100, 1) AS mastery_rate
+        FROM {BQ_PRE}.learning_outcomes_results` r
+        JOIN {BQ_PRE}.learning_outcomes` lo ON r.learning_outcome_id = lo.id
+        WHERE r.workflow_state = 'active'
+        GROUP BY 1, 2
+        HAVING assessments >= 10
+        ORDER BY assessments DESC
+        LIMIT 200
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def assessment_coverage():
+    return bq(f"""
+        SELECT
+          COUNT(DISTINCT lo.id) AS total_outcomes,
+          COUNT(DISTINCT r.learning_outcome_id) AS assessed_outcomes
+        FROM {BQ_PRE}.learning_outcomes` lo
+        LEFT JOIN {BQ_PRE}.learning_outcomes_results` r
+          ON lo.id = r.learning_outcome_id AND r.workflow_state = 'active'
+        WHERE lo.workflow_state = 'active'
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def college_benchmark():
+    return bq(f"""
+        SELECT
+          c.account_id,
+          COUNT(DISTINCT r.user_id) AS students,
+          COUNT(r.id) AS assessments,
+          ROUND(COUNTIF(r.mastery='t') / COUNT(r.id) * 100, 1) AS mastery_rate
+        FROM {BQ_PRE}.learning_outcomes_results` r
+        JOIN {BQ_PRE}.courses` c ON r.context_id = c.id
+        WHERE r.workflow_state = 'active'
+        GROUP BY 1
+        HAVING assessments >= 50
+        ORDER BY mastery_rate DESC
+    """)
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def college_summary():
     return bq(f"""
         SELECT
@@ -347,7 +440,7 @@ st.sidebar.divider()
 
 page = st.sidebar.radio(
     "Navigation",
-    ["Overview", "Colleges", "Learning Outcomes", "Course Performance", "Student Mastery"],
+    ["Overview", "Insights", "Colleges", "Learning Outcomes", "Course Performance", "Student Mastery"],
     index=0,
 )
 
@@ -363,16 +456,29 @@ if page == "Overview":
     st.title("📊 Overview Dashboard")
 
     with st.spinner("Loading…"):
-        stats   = overview_stats().iloc[0]
-        monthly = monthly_results()
-        scores  = score_distribution()
-        ratings = ratings_data()
+        stats    = overview_stats().iloc[0]
+        monthly  = monthly_results()
+        scores   = score_distribution()
+        ratings  = ratings_data()
+        coverage = assessment_coverage()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Active Courses",    f"{int(stats['active_courses']):,}")
-    c2.metric("Active Users",      f"{int(stats['active_users']):,}")
-    c3.metric("Learning Outcomes", f"{int(stats['active_outcomes']):,}")
-    c4.metric("Overall Mastery",   f"{stats['mastery_pct']}%")
+    total_out    = int(coverage["total_outcomes"].iloc[0])
+    assessed_out = int(coverage["assessed_outcomes"].iloc[0])
+
+    # MoM delta
+    trend_sorted = monthly.sort_values("month")
+    if len(trend_sorted) >= 2:
+        mom_delta = round(trend_sorted["mastery_pct"].iloc[-1] - trend_sorted["mastery_pct"].iloc[-2], 1)
+        mom_str   = f"+{mom_delta}%" if mom_delta >= 0 else f"{mom_delta}%"
+    else:
+        mom_str = None
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Active Courses",       f"{int(stats['active_courses']):,}")
+    c2.metric("Active Users",         f"{int(stats['active_users']):,}")
+    c3.metric("Learning Outcomes",    f"{total_out:,}")
+    c4.metric("Overall Mastery",      f"{stats['mastery_pct']}%", mom_str)
+    c5.metric("Outcomes Assessed",    f"{assessed_out:,}", f"{round(assessed_out/total_out*100)}% coverage")
 
     st.divider()
     left, right = st.columns(2)
@@ -413,6 +519,181 @@ if page == "Overview":
                 f'{row["description"]}{tag} — {row["points"]} pts</div>',
                 unsafe_allow_html=True,
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE: INSIGHTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+elif page == "Insights":
+    st.title("💡 Insights")
+    st.caption("Patterns and findings automatically derived from outcomes data.")
+
+    with st.spinner("Loading insights…"):
+        bands    = mastery_bands()
+        trend    = mom_trend()
+        coverage = assessment_coverage()
+
+    # ── Row 1: headline numbers ───────────────────────────────────────────────
+    total     = int(coverage["total_outcomes"].iloc[0])
+    assessed  = int(coverage["assessed_outcomes"].iloc[0])
+    unassessed = total - assessed
+
+    # MoM mastery change
+    trend_sorted = trend.sort_values("month")
+    if len(trend_sorted) >= 2:
+        latest_pct = trend_sorted["mastery_pct"].iloc[-1]
+        prev_pct   = trend_sorted["mastery_pct"].iloc[-2]
+        mom_delta  = round(latest_pct - prev_pct, 1)
+        delta_label = f"+{mom_delta}%" if mom_delta >= 0 else f"{mom_delta}%"
+    else:
+        latest_pct, mom_delta, delta_label = None, None, "—"
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Outcomes", f"{total:,}")
+    c2.metric("Outcomes Assessed", f"{assessed:,}", f"{round(assessed/total*100)}% of total")
+    c3.metric("Never Assessed", f"{unassessed:,}", f"{round(unassessed/total*100)}% of total", delta_color="inverse")
+    c4.metric("Latest Month Mastery", f"{latest_pct}%" if latest_pct else "—", delta_label)
+
+    st.divider()
+
+    # ── Row 2: mastery bands + trend ─────────────────────────────────────────
+    col_l, col_r = st.columns(2)
+
+    with col_l:
+        st.subheader("Proficiency Band Distribution")
+        band_order = ["Exceeds (90–100%)", "Meets (70–89%)", "Approaching (50–69%)", "Below (<50%)"]
+        band_colors = ["#2ecc71", "#3498db", "#f39c12", "#e74c3c"]
+        bands_sorted = bands.set_index("band").reindex(band_order).reset_index().dropna()
+        fig = px.pie(
+            bands_sorted, names="band", values="n",
+            color="band",
+            color_discrete_map=dict(zip(band_order, band_colors)),
+            hole=0.45,
+        )
+        fig.update_traces(textinfo="percent+label")
+        fig.update_layout(height=320, margin=dict(t=10), showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_r:
+        st.subheader("Monthly Mastery Trend")
+        fig2 = go.Figure()
+        fig2.add_scatter(
+            x=trend_sorted["month"], y=trend_sorted["mastery_pct"],
+            mode="lines+markers", line=dict(color="#667eea", width=2),
+            marker=dict(size=6), name="Mastery %",
+            fill="tozeroy", fillcolor="rgba(102,126,234,0.1)",
+        )
+        fig2.add_hline(y=trend_sorted["mastery_pct"].mean(),
+                       line_dash="dot", line_color="#f6a623",
+                       annotation_text=f"Avg {trend_sorted['mastery_pct'].mean():.1f}%")
+        fig2.update_layout(
+            yaxis=dict(title="Mastery %", range=[0, 105]),
+            height=320, margin=dict(t=10),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.divider()
+
+    # ── Row 3: outcomes needing attention ─────────────────────────────────────
+    st.subheader("🚨 Outcomes Needing Attention")
+    st.caption("Outcomes with ≥ 50 assessments and mastery rate below 70%")
+
+    min_n = st.slider("Min assessments threshold", 10, 500, 50, step=10)
+
+    with st.spinner("Loading at-risk outcomes…"):
+        at_risk = at_risk_outcomes(min_n)
+
+    if at_risk.empty:
+        st.success("No at-risk outcomes found at this threshold.")
+    else:
+        fig3 = px.bar(
+            at_risk.sort_values("mastery_rate"),
+            x="mastery_rate", y="outcome", orientation="h",
+            color="mastery_rate", color_continuous_scale="RdYlGn", range_color=[0, 100],
+            size_max=40,
+            custom_data=["assessments", "students"],
+            labels={"mastery_rate": "Mastery %", "outcome": "Outcome"},
+        )
+        fig3.update_traces(
+            hovertemplate="<b>%{y}</b><br>Mastery: %{x}%<br>Assessments: %{customdata[0]}<br>Students: %{customdata[1]}<extra></extra>"
+        )
+        fig3.add_vline(x=70, line_dash="dash", line_color="orange",
+                       annotation_text="70% threshold")
+        fig3.update_layout(
+            height=max(350, len(at_risk) * 28),
+            margin=dict(t=10), coloraxis_showscale=False,
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+        show = at_risk.copy()
+        show.columns = ["Code", "Outcome", "Assessments", "Students", "Mastery %", "Avg Score %"]
+        st.dataframe(show, use_container_width=True, height=300)
+
+    st.divider()
+
+    # ── Row 4: volume vs mastery quadrant ─────────────────────────────────────
+    st.subheader("📊 Volume vs Mastery — Quadrant View")
+    st.caption("Top-left quadrant (high volume, low mastery) = highest priority for intervention.")
+
+    with st.spinner("Loading quadrant data…"):
+        quad = outcome_volume_vs_mastery()
+
+    if not quad.empty:
+        med_vol     = quad["assessments"].median()
+        med_mastery = quad["mastery_rate"].median()
+
+        fig4 = px.scatter(
+            quad,
+            x="mastery_rate", y="assessments",
+            size="students", color="mastery_rate",
+            color_continuous_scale="RdYlGn", range_color=[0, 100],
+            hover_name="outcome",
+            hover_data={"code": True, "assessments": True, "students": True, "mastery_rate": True},
+            labels={"mastery_rate": "Mastery %", "assessments": "# Assessments",
+                    "students": "# Students"},
+        )
+        # Quadrant lines
+        fig4.add_vline(x=med_mastery, line_dash="dot", line_color="gray",
+                       annotation_text=f"Median {med_mastery:.0f}%")
+        fig4.add_hline(y=med_vol, line_dash="dot", line_color="gray",
+                       annotation_text=f"Median {int(med_vol)}")
+        # Quadrant labels
+        fig4.add_annotation(x=20,  y=quad["assessments"].max()*0.95, text="🚨 High Impact / Low Mastery",
+                            showarrow=False, font=dict(color="red", size=11))
+        fig4.add_annotation(x=85, y=quad["assessments"].max()*0.95, text="✅ High Impact / High Mastery",
+                            showarrow=False, font=dict(color="green", size=11))
+        fig4.update_layout(height=450, margin=dict(t=20), coloraxis_showscale=False)
+        st.plotly_chart(fig4, use_container_width=True)
+
+    st.divider()
+
+    # ── Row 5: college benchmark ──────────────────────────────────────────────
+    st.subheader("🏫 College Performance Benchmark")
+
+    with st.spinner("Loading college data…"):
+        bench = college_benchmark()
+
+    bench["college"] = bench["account_id"].map(COLLEGE_NAMES).fillna(
+        "Account " + bench["account_id"].astype(str)
+    )
+    bench = bench.sort_values("mastery_rate", ascending=False)
+    inst_avg = round(bench["mastery_rate"].mean(), 1)
+
+    fig5 = px.bar(
+        bench, x="college", y="mastery_rate",
+        color="mastery_rate", color_continuous_scale="RdYlGn", range_color=[0, 100],
+        labels={"college": "College", "mastery_rate": "Mastery %"},
+        text=bench["mastery_rate"].astype(str) + "%",
+    )
+    fig5.add_hline(y=inst_avg, line_dash="dash", line_color="#f6a623",
+                   annotation_text=f"Institution avg {inst_avg}%")
+    fig5.update_traces(textposition="outside")
+    fig5.update_layout(
+        height=400, margin=dict(t=20), coloraxis_showscale=False,
+        xaxis_tickangle=-35,
+    )
+    st.plotly_chart(fig5, use_container_width=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -614,6 +895,29 @@ elif page == "Learning Outcomes":
         st.plotly_chart(fig2, use_container_width=True)
 
     st.divider()
+
+    with st.spinner("Loading quadrant…"):
+        quad = outcome_volume_vs_mastery()
+
+    if not quad.empty and not search:
+        st.subheader("Volume vs Mastery Quadrant")
+        med_m = quad["mastery_rate"].median()
+        med_v = quad["assessments"].median()
+        fig_q = px.scatter(
+            quad, x="mastery_rate", y="assessments",
+            size="students", color="mastery_rate",
+            color_continuous_scale="RdYlGn", range_color=[0, 100],
+            hover_name="outcome", hover_data={"code": True},
+            labels={"mastery_rate": "Mastery %", "assessments": "# Assessments"},
+        )
+        fig_q.add_vline(x=med_m, line_dash="dot", line_color="gray")
+        fig_q.add_hline(y=med_v, line_dash="dot", line_color="gray")
+        fig_q.add_annotation(x=10, y=quad["assessments"].max()*0.93,
+                             text="🚨 Needs Attention", showarrow=False,
+                             font=dict(color="red", size=11))
+        fig_q.update_layout(height=380, margin=dict(t=10), coloraxis_showscale=False)
+        st.plotly_chart(fig_q, use_container_width=True)
+
     st.subheader("Outcomes Table")
     show = df[["display_name", "short_description", "calculation_method",
                "assessments", "mastery_rate", "avg_score"]].rename(columns={

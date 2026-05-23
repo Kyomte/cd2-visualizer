@@ -82,6 +82,7 @@ def get_client():
     from google.oauth2 import service_account
     if "gcp_credentials_json" in st.secrets:
         info = json.loads(st.secrets["gcp_credentials_json"])
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
         creds = service_account.Credentials.from_service_account_info(
             info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],

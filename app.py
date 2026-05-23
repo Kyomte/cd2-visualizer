@@ -611,7 +611,6 @@ elif page == "Insights":
             at_risk.sort_values("mastery_rate"),
             x="mastery_rate", y="outcome", orientation="h",
             color="mastery_rate", color_continuous_scale="RdYlGn", range_color=[0, 100],
-            size_max=40,
             custom_data=["assessments", "students"],
             labels={"mastery_rate": "Mastery %", "outcome": "Outcome"},
         )

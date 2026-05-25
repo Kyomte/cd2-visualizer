@@ -80,62 +80,54 @@ html, body, [class*="css"], .stApp, .stMarkdown, button, input, select, textarea
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 
-/* Page background: soft gradient + diagonal SVG wave overlay */
+/* Page background */
 .stApp {
     background: linear-gradient(135deg, #e8eef5 0%, #f5f8fb 50%, #eef2f7 100%) !important;
-    position: relative;
-}
-.stApp::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Cdefs%3E%3ClinearGradient id='w' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23c7d6e8' stop-opacity='0.18'/%3E%3Cstop offset='1' stop-color='%23e8eef5' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='75%25' cy='25%25' rx='55%25' ry='40%25' fill='url(%23w)'/%3E%3Cellipse cx='20%25' cy='75%25' rx='45%25' ry='35%25' fill='url(%23w)' opacity='0.7'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: -1;
 }
 
-/* Glass card base */
-.glass-card {
-    background: rgba(255,255,255,0.65);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255,255,255,0.85);
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(31,41,55,0.06);
-    padding: 1.25rem;
-    margin-bottom: 1rem;
-}
+/* Headings */
+h1 { font-weight: 700 !important; letter-spacing: -0.02em !important; font-size: 1.7rem !important; color: #1a2332 !important; }
+h2 { font-weight: 600 !important; letter-spacing: -0.01em !important; font-size: 1.25rem !important; color: #1a2332 !important; }
+h3 { font-weight: 600 !important; font-size: 1.05rem !important; color: #1a2332 !important; }
+h4, h5, h6 { color: #1a2332 !important; }
 
-/* Sidebar: white frosted */
+/* Sidebar */
 [data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.80) !important;
-    backdrop-filter: blur(24px) !important;
-    border-right: 1px solid rgba(255,255,255,0.85) !important;
-    box-shadow: 2px 0 20px rgba(31,41,55,0.05) !important;
+    background: #ffffff !important;
+    border-right: 1px solid #e5e7eb !important;
+    box-shadow: 2px 0 16px rgba(31,41,55,0.06) !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #1a2332 !important; }
+[data-testid="stSidebar"] label p,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] .stSelectbox label,
+[data-testid="stSidebar"] .stMultiSelect label {
+    color: #1a2332 !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
 }
 
 /* Sidebar nav pills */
+[data-testid="stSidebar"] .stRadio > div { gap: 2px; }
 [data-testid="stSidebar"] .stRadio label {
     padding: 0.45rem 0.75rem !important;
     border-radius: 10px !important;
     transition: all 0.18s ease;
-    color: #6b7280 !important;
-    font-weight: 500 !important;
-    font-size: 0.88rem !important;
+    cursor: pointer;
 }
-/* Active nav pill: white with shadow */
-[data-testid="stSidebar"] .stRadio label[data-checked="true"],
-[data-testid="stSidebar"] .stRadio label:has(input:checked) {
-    background: #ffffff !important;
-    box-shadow: 0 2px 8px rgba(31,41,55,0.10) !important;
-    color: #1a2332 !important;
+[data-testid="stSidebar"] .stRadio label:hover { background: #f3f4f6 !important; }
+[data-testid="stSidebar"] .stRadio label p,
+[data-testid="stSidebar"] .stRadio label span,
+[data-testid="stSidebar"] .stRadio label div {
+    color: #4b5563 !important;
+    font-size: 0.88rem !important;
+    font-weight: 500;
 }
 
-/* Metric cards: glass */
+/* Metric cards */
 [data-testid="stMetric"] {
-    background: rgba(255,255,255,0.65) !important;
-    backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(255,255,255,0.85) !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
     border-radius: 14px !important;
     padding: 1rem 1.25rem !important;
     box-shadow: 0 4px 16px rgba(31,41,55,0.05) !important;
@@ -166,23 +158,24 @@ html, body, [class*="css"], .stApp, .stMarkdown, button, input, select, textarea
 /* Buttons */
 .stButton > button {
     background: #ffffff !important;
-    border: 1px solid rgba(31,41,55,0.12) !important;
+    border: 1px solid #e5e7eb !important;
     color: #1a2332 !important;
     border-radius: 10px !important;
     font-weight: 600 !important;
-    box-shadow: 0 2px 8px rgba(31,41,55,0.06) !important;
+    box-shadow: 0 1px 4px rgba(31,41,55,0.06) !important;
     transition: all 0.18s ease !important;
 }
 .stButton > button:hover {
     background: #f8fafc !important;
-    box-shadow: 0 4px 16px rgba(31,41,55,0.10) !important;
+    box-shadow: 0 4px 12px rgba(31,41,55,0.10) !important;
     transform: translateY(-1px) !important;
+    border-color: #1f2937 !important;
 }
 
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     gap: 4px;
-    border-bottom: 1px solid rgba(31,41,55,0.08);
+    border-bottom: 1px solid #e5e7eb;
     background: transparent;
 }
 .stTabs [data-baseweb="tab"] {
@@ -194,33 +187,28 @@ html, body, [class*="css"], .stApp, .stMarkdown, button, input, select, textarea
 }
 .stTabs [aria-selected="true"] {
     color: #1a2332 !important;
-    background: rgba(255,255,255,0.8) !important;
+    background: #ffffff !important;
     border-bottom: 2px solid #1f2937 !important;
 }
 
-/* DataFrame: frosted */
+/* DataFrame */
 [data-testid="stDataFrame"] {
-    background: rgba(255,255,255,0.65) !important;
-    border: 1px solid rgba(255,255,255,0.85) !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
     border-radius: 14px !important;
     padding: 4px !important;
-    backdrop-filter: blur(12px) !important;
 }
 
-/* Form inputs: light */
+/* Form inputs */
 .stSelectbox > div > div, .stMultiSelect > div > div, .stTextInput > div > div {
-    background: rgba(255,255,255,0.75) !important;
-    border: 1px solid rgba(31,41,55,0.12) !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
     border-radius: 10px !important;
     color: #1a2332 !important;
 }
 
-/* Text colors */
-h1, h2, h3, h4, h5, h6 { color: #1a2332 !important; }
-p, li, span { color: #1a2332; }
-
 /* Divider */
-hr { border: none !important; border-top: 1px solid rgba(31,41,55,0.08) !important; margin: 1.25rem 0 !important; }
+hr { border: none !important; border-top: 1px solid #e5e7eb !important; margin: 1.25rem 0 !important; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

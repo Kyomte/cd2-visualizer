@@ -656,39 +656,33 @@ def metric_glass(label: str, value: str, delta: str = None,
     delta_html  = (f'<div style="font-size:0.78rem;color:{delta_color};font-weight:600;margin-top:2px;">'
                    f'{delta_arrow} {delta}</div>') if delta else ""
     icon_html   = f'<div style="margin-bottom:0.6rem;">{pastel_icon(icon, icon_bg)}</div>' if icon else ""
-    st.markdown(f"""
-        <div style="background:rgba(255,255,255,0.65);backdrop-filter:blur(16px);
-                    border:1px solid rgba(255,255,255,0.85);border-radius:14px;
-                    padding:1.1rem 1.25rem;box-shadow:0 4px 16px rgba(31,41,55,0.05);
-                    margin-bottom:0.75rem;">
-            {icon_html}
-            <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;
-                        letter-spacing:0.07em;color:{INK_MUTED};margin-bottom:0.3rem;">{label}</div>
-            <div style="font-size:1.6rem;font-weight:700;color:{INK};letter-spacing:-0.025em;line-height:1.1;">{value}</div>
-            {delta_html}
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:rgba(255,255,255,0.65);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.85);border-radius:14px;padding:1.1rem 1.25rem;box-shadow:0 4px 16px rgba(31,41,55,0.05);margin-bottom:0.75rem;">'
+        f'{icon_html}'
+        f'<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:{INK_MUTED};margin-bottom:0.3rem;">{label}</div>'
+        f'<div style="font-size:1.6rem;font-weight:700;color:{INK};letter-spacing:-0.025em;line-height:1.1;">{value}</div>'
+        f'{delta_html}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 def activity_row(icon: str, icon_bg: str, title: str, subtitle: str,
                  value: str, status_label: str, status_color: str):
     """Render a single activity-list row (transaction style)."""
-    st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:12px;padding:0.6rem 0;
-                    border-bottom:1px solid rgba(31,41,55,0.06);">
-            {pastel_icon(icon, icon_bg)}
-            <div style="flex:1;min-width:0;">
-                <div style="font-size:0.88rem;font-weight:600;color:{INK};
-                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{title}</div>
-                <div style="font-size:0.75rem;color:{INK_MUTED};margin-top:1px;">{subtitle}</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;">
-                <div style="font-size:0.88rem;font-weight:700;color:{INK};">{value}</div>
-                <div style="display:inline-block;margin-top:2px;padding:1px 8px;
-                            border-radius:999px;font-size:0.68rem;font-weight:600;
-                            background:{status_color}22;color:{status_color};">{status_label}</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:12px;padding:0.6rem 0;border-bottom:1px solid rgba(31,41,55,0.06);">'
+        f'{pastel_icon(icon, icon_bg)}'
+        f'<div style="flex:1;min-width:0;">'
+        f'<div style="font-size:0.88rem;font-weight:600;color:{INK};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{title}</div>'
+        f'<div style="font-size:0.75rem;color:{INK_MUTED};margin-top:1px;">{subtitle}</div>'
+        f'</div>'
+        f'<div style="text-align:right;flex-shrink:0;">'
+        f'<div style="font-size:0.88rem;font-weight:700;color:{INK};">{value}</div>'
+        f'<div style="display:inline-block;margin-top:2px;padding:1px 8px;border-radius:999px;font-size:0.68rem;font-weight:600;background:{status_color}22;color:{status_color};">{status_label}</div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 def dark_contrast_card(title: str, subtitle: str = "", live_count: int = None):
     """Renders a styled dark navy header for a section."""
@@ -703,36 +697,32 @@ def dark_contrast_card(title: str, subtitle: str = "", live_count: int = None):
         )
     sub_html = (f'<div style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-top:3px;">'
                 f'{subtitle}</div>') if subtitle else ""
-    st.markdown(f"""
-        <div style="background:{DARK_CONTRAST_BG};border-radius:16px;padding:1.25rem 1.4rem 0.75rem 1.4rem;
-                    box-shadow:0 8px 32px rgba(31,41,55,0.18);margin-bottom:0.5rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
-                <div>
-                    <div style="font-size:0.95rem;font-weight:700;color:#ffffff;letter-spacing:-0.01em;">{title}</div>
-                    {sub_html}
-                </div>
-                {live_html}
-            </div>
-        </div>
-        <style>@keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:0.4}}}}</style>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:{DARK_CONTRAST_BG};border-radius:16px;padding:1.25rem 1.4rem 0.75rem 1.4rem;box-shadow:0 8px 32px rgba(31,41,55,0.18);margin-bottom:0.5rem;">'
+        f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">'
+        f'<div>'
+        f'<div style="font-size:0.95rem;font-weight:700;color:#ffffff;letter-spacing:-0.01em;">{title}</div>'
+        f'{sub_html}'
+        f'</div>'
+        f'{live_html}'
+        f'</div>'
+        f'</div>'
+        f'<style>@keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:0.4}}}}</style>',
+        unsafe_allow_html=True,
+    )
 
 def hero_card(eyebrow: str, title: str, subtitle: str,
               primary_cta: str = None, secondary_cta: str = None,
               primary_key: str = None, secondary_key: str = None):
     """Render the big hero card with eyebrow + title + subtitle + CTA buttons."""
-    st.markdown(f"""
-        <div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);
-                    border:1px solid rgba(255,255,255,0.9);border-radius:20px;
-                    padding:1.75rem 2rem 1.25rem 2rem;
-                    box-shadow:0 8px 40px rgba(31,41,55,0.08);margin-bottom:0.5rem;">
-            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
-                        letter-spacing:0.12em;color:#6366f1;margin-bottom:0.5rem;">{eyebrow}</div>
-            <div style="font-size:1.85rem;font-weight:800;color:{INK};letter-spacing:-0.03em;
-                        line-height:1.15;margin-bottom:0.5rem;">{title}</div>
-            <div style="font-size:0.93rem;color:{INK_MUTED};line-height:1.55;margin-bottom:1rem;">{subtitle}</div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,0.9);border-radius:20px;padding:1.75rem 2rem 1.25rem 2rem;box-shadow:0 8px 40px rgba(31,41,55,0.08);margin-bottom:0.5rem;">'
+        f'<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#6366f1;margin-bottom:0.5rem;">{eyebrow}</div>'
+        f'<div style="font-size:1.85rem;font-weight:800;color:{INK};letter-spacing:-0.03em;line-height:1.15;margin-bottom:0.5rem;">{title}</div>'
+        f'<div style="font-size:0.93rem;color:{INK_MUTED};line-height:1.55;margin-bottom:1rem;">{subtitle}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
     if primary_cta or secondary_cta:
         btn_cols = st.columns([1, 1, 3])
         if primary_cta and primary_key:
@@ -772,21 +762,19 @@ def top_header(page_title: str, subtabs: list = None, tab_key: str = None,
         f'color:white;display:flex;align-items:center;justify-content:center;">{bell_count}</span>'
     ) if bell_count else ""
 
-    st.markdown(f"""
-        <div style="display:flex;align-items:center;justify-content:space-between;
-                    margin-bottom:0.5rem;padding:0.5rem 0;">
-            <div style="font-size:1.4rem;font-weight:800;color:{INK};letter-spacing:-0.025em;">{page_title}</div>
-            <div style="display:flex;align-items:center;gap:12px;">
-                <div style="position:relative;display:inline-flex;">
-                    <span style="font-size:1.2rem;cursor:pointer;" title="At-risk outcomes">&#x1F514;</span>
-                    {bell_badge}
-                </div>
-                <div style="width:34px;height:34px;border-radius:50%;background:{DARK_CONTRAST_BG};
-                            display:flex;align-items:center;justify-content:center;
-                            font-size:0.78rem;font-weight:700;color:white;">KM</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;padding:0.5rem 0;">'
+        f'<div style="font-size:1.4rem;font-weight:800;color:{INK};letter-spacing:-0.025em;">{page_title}</div>'
+        f'<div style="display:flex;align-items:center;gap:12px;">'
+        f'<div style="position:relative;display:inline-flex;">'
+        f'<span style="font-size:1.2rem;cursor:pointer;" title="At-risk outcomes">&#x1F514;</span>'
+        f'{bell_badge}'
+        f'</div>'
+        f'<div style="width:34px;height:34px;border-radius:50%;background:{DARK_CONTRAST_BG};display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;color:white;">KM</div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     selected_subtab = None
     search_value = None
@@ -941,13 +929,13 @@ if page == "Overview":
                 cname = row["college"][:22] + "…" if len(row["college"]) > 22 else row["college"]
                 rate  = row["mastery_rate"]
                 color = SUCCESS if rate >= 70 else (WARN if rate >= 50 else DANGER)
-                st.markdown(f"""
-                    <div style="display:flex;justify-content:space-between;align-items:center;
-                                padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
-                        <span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>
-                        <span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    f'<span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>'
+                    f'<span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
     st.divider()
 
@@ -1320,13 +1308,13 @@ elif page == "Colleges":
                         cname = row["course_name"][:20] + "…" if len(str(row["course_name"])) > 20 else str(row["course_name"])
                         rate  = row["mastery_rate"] if pd.notna(row["mastery_rate"]) else 0
                         color = SUCCESS if rate >= 70 else (WARN if rate >= 50 else DANGER)
-                        st.markdown(f"""
-                            <div style="display:flex;justify-content:space-between;align-items:center;
-                                        padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
-                                <span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>
-                                <span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
+                            f'<span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>'
+                            f'<span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
 
             st.divider()
 
@@ -1683,13 +1671,13 @@ elif page == "Course Performance":
             cname = (str(row["name"])[:18] + "…") if len(str(row["name"])) > 18 else str(row["name"])
             rate  = row["mastery_rate"] if pd.notna(row.get("mastery_rate")) else 0
             color = SUCCESS if rate >= 70 else (WARN if rate >= 50 else DANGER)
-            st.markdown(f"""
-                <div style="display:flex;justify-content:space-between;align-items:center;
-                            padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
-                    <span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>
-                    <span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
+                f'<span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>'
+                f'<span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 

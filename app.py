@@ -913,17 +913,19 @@ if page == "Overview":
         if not bench.empty:
             bench["college"] = bench["account_id"].map(COLLEGE_NAMES).fillna("Acct " + bench["account_id"].astype(str))
             top5 = bench.head(5)
+            rows_html = f'<div style="background:{DARK_CONTRAST_BG};border-radius:0 0 16px 16px;padding:0 1.4rem 1rem 1.4rem;margin-top:-8px;">'
             for _, row in top5.iterrows():
                 cname = row["college"][:22] + "…" if len(row["college"]) > 22 else row["college"]
                 rate  = row["mastery_rate"]
                 color = SUCCESS if rate >= 70 else (WARN if rate >= 50 else DANGER)
-                st.markdown(
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
-                    f'<span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>'
+                rows_html += (
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    f'<span style="color:rgba(255,255,255,0.75);font-size:0.8rem;">{cname}</span>'
                     f'<span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
+                    f'</div>'
                 )
+            rows_html += '</div>'
+            st.markdown(rows_html, unsafe_allow_html=True)
 
     st.divider()
 
@@ -1292,17 +1294,19 @@ elif page == "Colleges":
                     courses_c = courses_for_college(sel_account_id)
                 dark_contrast_card("Top Courses", "by enrolment")
                 if not courses_c.empty:
+                    rows_html = f'<div style="background:{DARK_CONTRAST_BG};border-radius:0 0 16px 16px;padding:0 1.4rem 1rem 1.4rem;margin-top:-8px;">'
                     for _, row in courses_c.head(5).iterrows():
                         cname = row["course_name"][:20] + "…" if len(str(row["course_name"])) > 20 else str(row["course_name"])
                         rate  = row["mastery_rate"] if pd.notna(row["mastery_rate"]) else 0
                         color = SUCCESS if rate >= 70 else (WARN if rate >= 50 else DANGER)
-                        st.markdown(
-                            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
-                            f'<span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>'
+                        rows_html += (
+                            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
+                            f'<span style="color:rgba(255,255,255,0.75);font-size:0.8rem;">{cname}</span>'
                             f'<span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>'
-                            f'</div>',
-                            unsafe_allow_html=True,
+                            f'</div>'
                         )
+                    rows_html += '</div>'
+                    st.markdown(rows_html, unsafe_allow_html=True)
 
             st.divider()
 
@@ -1655,17 +1659,19 @@ elif page == "Course Performance":
 
     with col_dark:
         dark_contrast_card("Top 5 by Enrolment", "courses leaderboard")
+        rows_html = f'<div style="background:{DARK_CONTRAST_BG};border-radius:0 0 16px 16px;padding:0 1.4rem 1rem 1.4rem;margin-top:-8px;">'
         for _, row in df_cp.head(5).iterrows():
             cname = (str(row["name"])[:18] + "…") if len(str(row["name"])) > 18 else str(row["name"])
             rate  = row["mastery_rate"] if pd.notna(row.get("mastery_rate")) else 0
             color = SUCCESS if rate >= 70 else (WARN if rate >= 50 else DANGER)
-            st.markdown(
-                f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
-                f'<span style="color:rgba(255,255,255,0.8);font-size:0.8rem;">{cname}</span>'
+            rows_html += (
+                f'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.08);">'
+                f'<span style="color:rgba(255,255,255,0.75);font-size:0.8rem;">{cname}</span>'
                 f'<span style="color:{color};font-weight:700;font-size:0.88rem;">{rate:.0f}%</span>'
-                f'</div>',
-                unsafe_allow_html=True,
+                f'</div>'
             )
+        rows_html += '</div>'
+        st.markdown(rows_html, unsafe_allow_html=True)
 
     st.divider()
 

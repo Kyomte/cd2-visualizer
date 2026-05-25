@@ -91,7 +91,7 @@ html, body, [class*="css"], .stApp, .stMarkdown, button, input, select, textarea
     inset: 0;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Cdefs%3E%3ClinearGradient id='w' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23c7d6e8' stop-opacity='0.18'/%3E%3Cstop offset='1' stop-color='%23e8eef5' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='75%25' cy='25%25' rx='55%25' ry='40%25' fill='url(%23w)'/%3E%3Cellipse cx='20%25' cy='75%25' rx='45%25' ry='35%25' fill='url(%23w)' opacity='0.7'/%3E%3C/svg%3E");
     pointer-events: none;
-    z-index: 0;
+    z-index: -1;
 }
 
 /* Glass card base */

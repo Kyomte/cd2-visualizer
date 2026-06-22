@@ -348,7 +348,18 @@ def mastery_bands(date_days: int = 0):
     """)
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def at_risk_outcomes(min_assessments: int = 50):
+def at_risk_outcomes(min_assessments: int = 50, account_ids: tuple = ()):
+    # Scope to selected colleges in-query so the LIMIT applies after filtering.
+    acct_clause = ""
+    if account_ids:
+        ids = ", ".join(str(int(a)) for a in account_ids)
+        acct_clause = f"""
+          AND (
+            (lo.context_type = 'Account' AND lo.context_id IN ({ids}))
+            OR (lo.context_type = 'Course' AND lo.context_id IN (
+              SELECT id FROM {BQ_PRE}.courses` WHERE account_id IN ({ids})
+            ))
+          )"""
     return bq(f"""
         SELECT
           lo.display_name AS code,
@@ -359,7 +370,7 @@ def at_risk_outcomes(min_assessments: int = 50):
           ROUND(AVG(r.percent) * 100, 1) AS avg_score
         FROM {BQ_PRE}.learning_outcomes_results` r
         JOIN {BQ_PRE}.learning_outcomes` lo ON r.learning_outcome_id = lo.id
-        WHERE r.workflow_state = 'active'
+        WHERE r.workflow_state = 'active'{acct_clause}
         GROUP BY 1, 2
         HAVING assessments >= {min_assessments} AND mastery_rate < 70
         ORDER BY mastery_rate ASC
@@ -535,7 +546,12 @@ def all_outcomes():
     """)
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def course_performance(min_students: int = 1):
+def course_performance(min_students: int = 1, account_ids: tuple = ()):
+    # Scope to selected colleges in-query so the LIMIT applies after filtering.
+    acct_clause = ""
+    if account_ids:
+        ids = ", ".join(str(int(a)) for a in account_ids)
+        acct_clause = f" AND c.account_id IN ({ids})"
     return bq(f"""
         SELECT c.id, c.name, c.course_code,
           COUNT(DISTINCT r.user_id) AS students, COUNT(r.id) AS assessments,
@@ -543,7 +559,7 @@ def course_performance(min_students: int = 1):
           ROUND(AVG(r.percent) * 100, 1) AS avg_score
         FROM {BQ_PRE}.courses` c
         JOIN {BQ_PRE}.learning_outcomes_results` r ON c.id = r.context_id
-        WHERE r.workflow_state = 'active'
+        WHERE r.workflow_state = 'active'{acct_clause}
         GROUP BY 1, 2, 3 HAVING students >= {min_students}
         ORDER BY assessments DESC LIMIT 500
     """)
@@ -745,8 +761,16 @@ def dark_leaderboard_card(title: str, subtitle: str = "", live_count: int = None
 
 def hero_card(eyebrow: str, title: str, subtitle: str,
               primary_cta: str = None, secondary_cta: str = None,
-              primary_key: str = None, secondary_key: str = None):
-    """Render the big hero card with eyebrow + title + subtitle + CTA buttons."""
+              primary_key: str = None, secondary_key: str = None,
+              primary_download: dict = None) -> tuple:
+    """
+    Render the big hero card with eyebrow + title + subtitle + CTA buttons.
+
+    Returns (primary_clicked, secondary_clicked) booleans so call sites can wire
+    behavior to each CTA. When `primary_download` ({data, file_name, mime}) is
+    given, the primary CTA renders as an st.download_button instead of a button
+    and its returned click flag reflects the download click.
+    """
     st.markdown(
         f'<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,0.9);border-radius:20px;padding:1.75rem 2rem 1.25rem 2rem;box-shadow:0 8px 40px rgba(31,41,55,0.08);margin-bottom:0.5rem;">'
         f'<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#6366f1;margin-bottom:0.5rem;">{eyebrow}</div>'
@@ -755,19 +779,36 @@ def hero_card(eyebrow: str, title: str, subtitle: str,
         f'</div>',
         unsafe_allow_html=True,
     )
+    primary_clicked = False
+    secondary_clicked = False
     if primary_cta or secondary_cta:
         btn_cols = st.columns([1, 1, 3])
         if primary_cta and primary_key:
             with btn_cols[0]:
-                st.button(primary_cta, key=primary_key, use_container_width=True)
+                if primary_download is not None:
+                    primary_clicked = st.download_button(
+                        primary_cta,
+                        data=primary_download["data"],
+                        file_name=primary_download["file_name"],
+                        mime=primary_download.get("mime", "text/csv"),
+                        key=primary_key,
+                        use_container_width=True,
+                    )
+                else:
+                    primary_clicked = st.button(primary_cta, key=primary_key, use_container_width=True)
         if secondary_cta and secondary_key:
             with btn_cols[1]:
-                st.button(secondary_cta, key=secondary_key, use_container_width=True)
+                secondary_clicked = st.button(secondary_cta, key=secondary_key, use_container_width=True)
+    return primary_clicked, secondary_clicked
 
 def action_button_row(actions: list):
     """
     Render a bottom row of action buttons.
     actions = list of dicts: {label, icon, icon_bg, key, callback}
+
+    An action may instead supply a `download` dict
+    ({data, file_name, mime}) to render an st.download_button, which is
+    required for browser file downloads in Streamlit.
     """
     if not actions:
         return
@@ -775,11 +816,36 @@ def action_button_row(actions: list):
     cols = st.columns(len(actions))
     for col, act in zip(cols, actions):
         with col:
-            if st.button(f"{act['icon']} {act['label']}", key=act['key'], use_container_width=True):
+            dl = act.get('download')
+            if dl is not None:
+                st.download_button(
+                    f"{act['icon']} {act['label']}",
+                    data=dl["data"],
+                    file_name=dl["file_name"],
+                    mime=dl.get("mime", "text/csv"),
+                    key=act['key'],
+                    use_container_width=True,
+                )
+            elif st.button(f"{act['icon']} {act['label']}", key=act['key'], use_container_width=True):
                 cb = act.get('callback')
                 if cb:
                     cb()
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
+    """Encode a DataFrame as UTF-8 CSV bytes for download."""
+    return df.to_csv(index=False).encode("utf-8")
+
+
+def reset_page_filters(keys: list):
+    """
+    Clear page-level filter/search widget state, then rerun.
+    Pops each key from session_state so widgets fall back to defaults.
+    """
+    for k in keys:
+        st.session_state.pop(k, None)
+    st.rerun()
 
 def top_header(page_title: str, subtabs: list = None, tab_key: str = None,
                search_placeholder: str = None, search_key: str = None) -> tuple:
@@ -824,6 +890,26 @@ def top_header(page_title: str, subtabs: list = None, tab_key: str = None,
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# NAVIGATION REQUESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Streamlit forbids mutating a widget-keyed session_state value after the widget
+# has been instantiated in the current run. To navigate from a button handler we
+# stash the desired widget values under a "pending nav" dict and apply them here,
+# at the top of the script, BEFORE any nav widget is created.
+
+def nav_to(**widget_values):
+    """Queue widget-key updates (e.g. browse_nav, colleges_subtab) and rerun."""
+    st.session_state.setdefault("_pending_nav", {}).update(widget_values)
+    st.rerun()
+
+_pending = st.session_state.pop("_pending_nav", None)
+if _pending:
+    for _k, _v in _pending.items():
+        st.session_state[_k] = _v
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -856,6 +942,52 @@ st.sidebar.markdown(f'<div style="font-size:0.65rem;font-weight:700;text-transfo
 analyze_page = st.sidebar.radio("Analyze nav", ["— none —", "Insights"], label_visibility="collapsed", key="analyze_nav")
 
 page = analyze_page if analyze_page != "— none —" else browse_page
+
+# Resolve the sidebar college selection to account IDs so every page can honor it.
+NAME_TO_ACCOUNT = {name: aid for aid, name in COLLEGE_NAMES.items()}
+selected_account_ids = [NAME_TO_ACCOUNT[name] for name in selected_colleges
+                        if name in NAME_TO_ACCOUNT]
+college_filter_active = bool(selected_account_ids)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def courses_in_accounts(account_ids: tuple):
+    """Course IDs belonging to the given account IDs (for cross-page filtering)."""
+    if not account_ids:
+        return pd.DataFrame(columns=["id"])
+    ids = ", ".join(str(int(a)) for a in account_ids)
+    return bq(f"""
+        SELECT id, account_id FROM {BQ_PRE}.courses`
+        WHERE account_id IN ({ids})
+    """)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def outcome_ids_in_accounts(account_ids: tuple):
+    """Outcome IDs scoped to the given account IDs (account- or course-level)."""
+    if not account_ids:
+        return pd.DataFrame(columns=["id"])
+    ids = ", ".join(str(int(a)) for a in account_ids)
+    return bq(f"""
+        SELECT DISTINCT lo.id
+        FROM {BQ_PRE}.learning_outcomes` lo
+        WHERE lo.workflow_state = 'active'
+          AND (
+            (lo.context_type = 'Account' AND lo.context_id IN ({ids}))
+            OR (lo.context_type = 'Course' AND lo.context_id IN (
+              SELECT id FROM {BQ_PRE}.courses` WHERE account_id IN ({ids})
+            ))
+          )
+    """)
+
+
+def filter_label() -> str:
+    """Human-readable summary of the active sidebar college filter."""
+    if not college_filter_active:
+        return ""
+    if len(selected_colleges) == 1:
+        return f" · filtered to {selected_colleges[0]}"
+    return f" · filtered to {len(selected_colleges)} colleges"
 
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
 st.sidebar.markdown(f'<div style="font-size:0.72rem;color:{INK_MUTED};margin-bottom:4px;">Cache freshness</div>', unsafe_allow_html=True)
@@ -910,15 +1042,23 @@ if page == "Overview":
     # Row 1: Hero + metrics
     col_hero, col_metrics = st.columns([2.2, 1])
     with col_hero:
-        hero_card(
+        _, hero_drill = hero_card(
             eyebrow="CANVAS DATA 2",
             title="Institution Outcomes Performance",
-            subtitle=f"Tracking {total_out:,} learning outcomes across {int(stats['active_courses']):,} courses — {stats['mastery_pct']}% overall mastery rate.",
+            subtitle=f"Tracking {total_out:,} learning outcomes across {int(stats['active_courses']):,} courses — {stats['mastery_pct']}% overall mastery rate.{filter_label()}",
             primary_cta="📥 Export Report",
             primary_key="overview_export",
             secondary_cta="🔍 Drill In",
             secondary_key="overview_drill",
+            primary_download={
+                "data": df_to_csv_bytes(monthly.sort_values("month")),
+                "file_name": "overview_monthly_trend.csv",
+            },
         )
+    if hero_drill:
+        # "Drill In" → jump to the Colleges page, drill-down view.
+        nav_to(browse_nav="Colleges", analyze_nav="— none —",
+               colleges_subtab="Drill-Down")
     with col_metrics:
         metric_glass("Active Students", f"{int(stats['active_users']):,}", icon="👤", icon_bg=PASTEL_BLUE)
         metric_glass(
@@ -953,6 +1093,8 @@ if page == "Overview":
     with col_dark:
         with st.spinner(""):
             bench = college_benchmark()
+        if college_filter_active:
+            bench = bench[bench["account_id"].isin(selected_account_ids)]
         if not bench.empty:
             bench["college"] = bench["account_id"].map(COLLEGE_NAMES).fillna("Acct " + bench["account_id"].astype(str))
             top5 = bench.head(5)
@@ -991,11 +1133,20 @@ if page == "Overview":
                         unsafe_allow_html=True
                     )
 
+    def _overview_compare():
+        nav_to(browse_nav="Colleges", analyze_nav="— none —",
+               colleges_subtab="Compare")
+
     action_button_row([
         {"label": "Refresh", "icon": "🔄", "icon_bg": PASTEL_BLUE,   "key": "ov_refresh",  "callback": lambda: (st.cache_data.clear(), st.rerun())},
-        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "ov_export",   "callback": None},
-        {"label": "Compare", "icon": "⚖️", "icon_bg": PASTEL_YELLOW, "key": "ov_compare",  "callback": None},
-        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "ov_reset",    "callback": None},
+        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "ov_export",
+         "download": {"data": df_to_csv_bytes(monthly.sort_values("month")),
+                      "file_name": "overview_monthly_trend.csv"}},
+        {"label": "Compare", "icon": "⚖️", "icon_bg": PASTEL_YELLOW, "key": "ov_compare",  "callback": _overview_compare},
+        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "ov_reset",
+         "callback": lambda: reset_page_filters(
+             ["overview_subtab", "overview_search", "overview_chart_type",
+              "college_filter", "date_filter_label"])},
     ])
 
 
@@ -1023,7 +1174,9 @@ elif page == "Insights":
         latest_pct, delta_label = None, "—"
 
     with st.spinner("Loading at-risk…"):
-        at_risk_preview = at_risk_outcomes(50)
+        # Honor the sidebar college filter (scoped in-query so LIMIT applies after).
+        at_risk_preview = at_risk_outcomes(
+            50, tuple(selected_account_ids) if college_filter_active else ())
 
     subtab, search_val = top_header(
         "Outcomes Insights",
@@ -1036,15 +1189,22 @@ elif page == "Insights":
     # Row 1: Hero + metrics
     col_hero, col_metrics = st.columns([2.2, 1])
     with col_hero:
-        hero_card(
+        _, ins_hero_filter = hero_card(
             eyebrow="ANALYTICS",
             title="Outcomes Analytics",
-            subtitle=f"{len(at_risk_preview):,} outcomes flagged at-risk (mastery < 70%). {round(assessed/total*100) if total else 0}% of outcomes have been assessed.",
+            subtitle=f"{len(at_risk_preview):,} outcomes flagged at-risk (mastery < 70%). {round(assessed/total*100) if total else 0}% of outcomes have been assessed.{filter_label()}",
             primary_cta="📥 Export Insights",
             primary_key="ins_export",
             secondary_cta="🔍 Filter",
             secondary_key="ins_filter",
+            primary_download={
+                "data": df_to_csv_bytes(at_risk_preview),
+                "file_name": "at_risk_outcomes.csv",
+            },
         )
+    if ins_hero_filter:
+        # "Filter" → jump to the At-Risk subtab which holds the threshold filter.
+        nav_to(insights_subtab="At-Risk")
     with col_metrics:
         metric_glass("At-Risk Outcomes", f"{len(at_risk_preview):,}", icon="🚨", icon_bg=PASTEL_PEACH, status="down")
         metric_glass("Coverage", f"{round(assessed/total*100) if total else 0}%", icon="📊", icon_bg=PASTEL_MINT)
@@ -1095,7 +1255,8 @@ elif page == "Insights":
         st.caption("Outcomes with >= N assessments and mastery rate below 70%.")
         min_n = st.slider("Min assessments threshold", 10, 500, 50, step=10, key="insights_min_n")
         with st.spinner("Loading…"):
-            at_risk = at_risk_outcomes(min_n)
+            at_risk = at_risk_outcomes(
+                min_n, tuple(selected_account_ids) if college_filter_active else ())
         if at_risk.empty:
             st.success("No at-risk outcomes at this threshold.")
         else:
@@ -1187,6 +1348,8 @@ elif page == "Insights":
         st.markdown("##### College Performance Benchmark")
         with st.spinner("Loading college data…"):
             bench2 = college_benchmark()
+        if college_filter_active:
+            bench2 = bench2[bench2["account_id"].isin(selected_account_ids)]
         bench2["college"] = bench2["account_id"].map(COLLEGE_NAMES).fillna(
             "Account " + bench2["account_id"].astype(str))
         bench2 = bench2.sort_values("mastery_rate", ascending=False)
@@ -1207,9 +1370,15 @@ elif page == "Insights":
 
     action_button_row([
         {"label": "Refresh", "icon": "🔄", "icon_bg": PASTEL_BLUE,   "key": "ins_refresh",  "callback": lambda: (st.cache_data.clear(), st.rerun())},
-        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "ins_export2",  "callback": None},
-        {"label": "Filter",  "icon": "🔍", "icon_bg": PASTEL_YELLOW, "key": "ins_filter2",  "callback": None},
-        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "ins_reset",    "callback": None},
+        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "ins_export2",
+         "download": {"data": df_to_csv_bytes(at_risk_preview),
+                      "file_name": "at_risk_outcomes.csv"}},
+        {"label": "Filter",  "icon": "🔍", "icon_bg": PASTEL_YELLOW, "key": "ins_filter2",
+         "callback": lambda: nav_to(insights_subtab="At-Risk")},
+        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "ins_reset",
+         "callback": lambda: reset_page_filters(
+             ["insights_subtab", "insights_search", "insights_min_n",
+              "college_filter", "date_filter_label"])},
     ])
 
 
@@ -1248,10 +1417,16 @@ elif page == "Colleges":
 
     college_options_list = col_agg[col_agg["assessments"].fillna(0) > 0]["college"].tolist()
 
+    # Export-ready college table (respects sidebar filter + search).
+    colleges_export = col_agg[["college", "outcomes", "assessments",
+                               "mastery_rate", "avg_score"]].copy()
+    colleges_export.columns = ["College", "Outcomes", "Assessments",
+                               "Mastery %", "Avg Score %"]
+
     # Hero + metrics
     col_hero, col_metrics = st.columns([2.2, 1])
     with col_hero:
-        hero_card(
+        _, col_hero_compare = hero_card(
             eyebrow="DRILL-DOWN",
             title="All Colleges",
             subtitle=f"Outcomes, performance, and courses grouped by college / department. {len(col_agg):,} colleges in view.",
@@ -1259,7 +1434,13 @@ elif page == "Colleges":
             primary_key="col_export",
             secondary_cta="⚖️ Compare",
             secondary_key="col_compare_btn",
+            primary_download={
+                "data": df_to_csv_bytes(colleges_export),
+                "file_name": "colleges_summary.csv",
+            },
         )
+    if col_hero_compare:
+        nav_to(colleges_subtab="Compare")
     with col_metrics:
         metric_glass("Colleges", f"{len(col_agg):,}", icon="🏫", icon_bg=PASTEL_BLUE)
         avg_mastery = round(col_agg["mastery_rate"].mean(), 1) if not col_agg.empty else 0
@@ -1442,21 +1623,55 @@ elif page == "Colleges":
         chosen = st.multiselect("Select up to 2 colleges to compare",
                                 sorted(college_options_list),
                                 default=sorted(college_options_list)[:2],
-                                max_selections=2)
+                                max_selections=2,
+                                key="colleges_compare_select")
         if len(chosen) < 2:
             st.info("Pick 2 colleges to see the side-by-side comparison.")
         else:
+            days2 = st.session_state.get("date_filter_days", 0)
+            rows = [col_agg[col_agg["college"] == cname].iloc[0] for cname in chosen]
+
+            def _num(v):
+                return float(v) if pd.notna(v) else None
+
+            def _delta_str(a, b, suffix="", inv=False):
+                """Delta of college A relative to college B. inv=True flips sign coloring."""
+                if a is None or b is None:
+                    return None
+                d = round(a - b, 1)
+                base = f"{d:+g}{suffix} vs other"
+                return ("inverse", base) if inv else base
+
+            # Per-college metric cards with deltas relative to the OTHER college.
             cols = st.columns(2)
             for idx, cname in enumerate(chosen):
-                sel_row = col_agg[col_agg["college"] == cname].iloc[0]
+                sel_row = rows[idx]
+                other   = rows[1 - idx]
                 aid = int(sel_row["account_id"])
                 with cols[idx]:
                     st.markdown(f"### {cname}")
                     m1, m2 = st.columns(2)
-                    m1.metric("Outcomes",  f"{int(sel_row['outcomes']):,}")
-                    m2.metric("Mastery", f"{sel_row['mastery_rate']:.1f}%"
-                              if pd.notna(sel_row['mastery_rate']) else "—")
-                    days2 = st.session_state.get("date_filter_days", 0)
+                    m1.metric(
+                        "Mastery",
+                        f"{sel_row['mastery_rate']:.1f}%" if pd.notna(sel_row['mastery_rate']) else "—",
+                        delta=_delta_str(_num(sel_row['mastery_rate']), _num(other['mastery_rate']), "%"),
+                    )
+                    m2.metric(
+                        "Avg Score",
+                        f"{sel_row['avg_score']:.1f}%" if pd.notna(sel_row['avg_score']) else "—",
+                        delta=_delta_str(_num(sel_row['avg_score']), _num(other['avg_score']), "%"),
+                    )
+                    m3, m4 = st.columns(2)
+                    m3.metric(
+                        "Outcomes",
+                        f"{int(sel_row['outcomes']):,}",
+                        delta=_delta_str(_num(sel_row['outcomes']), _num(other['outcomes'])),
+                    )
+                    m4.metric(
+                        "Assessments",
+                        f"{int(sel_row['assessments'] or 0):,}",
+                        delta=_delta_str(_num(sel_row['assessments'] or 0), _num(other['assessments'] or 0)),
+                    )
                     m_data = monthly_results_for_college(aid, days2)
                     if not m_data.empty:
                         fig_c = go.Figure()
@@ -1468,14 +1683,80 @@ elif page == "Colleges":
                             fillcolor=f"rgba({99 if idx==0 else 6},{102 if idx==0 else 182},{241 if idx==0 else 212},0.15)",
                         )
                         fig_c.update_layout(yaxis=dict(range=[0, 105]))
-                        apply_chart_theme(fig_c, height=300, show_legend=False)
+                        apply_chart_theme(fig_c, height=260, show_legend=False)
                         st.plotly_chart(fig_c, use_container_width=True)
+
+            st.divider()
+
+            # Overlaid trend so both colleges share one axis.
+            st.markdown("##### Mastery Trend — Side by Side")
+            fig_cmp = go.Figure()
+            for idx, cname in enumerate(chosen):
+                aid = int(rows[idx]["account_id"])
+                m_data = monthly_results_for_college(aid, days2)
+                if not m_data.empty:
+                    fig_cmp.add_scatter(
+                        x=m_data["month"], y=m_data["mastery_pct"],
+                        mode="lines+markers", name=cname,
+                        line=dict(color=CHART_SEQ[idx], width=2.5),
+                    )
+            fig_cmp.update_layout(yaxis=dict(title="Mastery %", range=[0, 105]))
+            apply_chart_theme(fig_cmp, height=340, show_legend=True)
+            add_time_controls(fig_cmp)
+            st.plotly_chart(fig_cmp, use_container_width=True)
+
+            # Delta summary table (college A − college B).
+            st.markdown("##### Head-to-Head Deltas")
+            a, b = rows[0], rows[1]
+            def _diff(col):
+                av, bv = _num(a[col]), _num(b[col])
+                if av is None or bv is None:
+                    return "—"
+                return f"{av - bv:+.1f}"
+            delta_table = pd.DataFrame({
+                "Metric": ["Outcomes", "Assessments", "Mastery %", "Avg Score %"],
+                chosen[0]: [
+                    f"{int(a['outcomes']):,}", f"{int(a['assessments'] or 0):,}",
+                    f"{_num(a['mastery_rate']):.1f}" if pd.notna(a['mastery_rate']) else "—",
+                    f"{_num(a['avg_score']):.1f}" if pd.notna(a['avg_score']) else "—",
+                ],
+                chosen[1]: [
+                    f"{int(b['outcomes']):,}", f"{int(b['assessments'] or 0):,}",
+                    f"{_num(b['mastery_rate']):.1f}" if pd.notna(b['mastery_rate']) else "—",
+                    f"{_num(b['avg_score']):.1f}" if pd.notna(b['avg_score']) else "—",
+                ],
+                "Δ (A − B)": [_diff("outcomes"), _diff("assessments"),
+                              _diff("mastery_rate"), _diff("avg_score")],
+            })
+            st.dataframe(delta_table, use_container_width=True, hide_index=True)
+
+            # Winner callout on mastery rate.
+            ma, mb = _num(a["mastery_rate"]), _num(b["mastery_rate"])
+            if ma is not None and mb is not None and ma != mb:
+                winner = chosen[0] if ma > mb else chosen[1]
+                gap = abs(round(ma - mb, 1))
+                st.success(f"🏆 **{winner}** leads on mastery rate by {gap} percentage points.")
+
+            st.download_button(
+                "📥 Export comparison",
+                data=df_to_csv_bytes(delta_table),
+                file_name="college_comparison.csv",
+                mime="text/csv",
+                key="college_compare_export",
+            )
 
     action_button_row([
         {"label": "Refresh", "icon": "🔄", "icon_bg": PASTEL_BLUE,   "key": "col_refresh",  "callback": lambda: (st.cache_data.clear(), st.rerun())},
-        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "col_export2",  "callback": None},
-        {"label": "Compare", "icon": "⚖️", "icon_bg": PASTEL_YELLOW, "key": "col_compare2", "callback": None},
-        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "col_reset",    "callback": None},
+        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "col_export2",
+         "download": {"data": df_to_csv_bytes(colleges_export),
+                      "file_name": "colleges_summary.csv"}},
+        {"label": "Compare", "icon": "⚖️", "icon_bg": PASTEL_YELLOW, "key": "col_compare2",
+         "callback": lambda: nav_to(colleges_subtab="Compare")},
+        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "col_reset",
+         "callback": lambda: reset_page_filters(
+             ["colleges_subtab", "colleges_search", "college_select",
+              "college_outcome_search", "college_top_n", "colleges_compare_select",
+              "college_filter", "date_filter_label"])},
     ])
 
 
@@ -1495,6 +1776,11 @@ elif page == "Learning Outcomes":
         search_key="lo_header_search"
     )
 
+    # Honor the sidebar college filter (match on outcome id; codes are not unique).
+    if college_filter_active:
+        sel_ids = set(outcome_ids_in_accounts(tuple(selected_account_ids))["id"])
+        df = df[df["id"].isin(sel_ids)]
+
     if search_val:
         mask = (
             df["display_name"].str.contains(search_val, case=False, na=False) |
@@ -1505,18 +1791,32 @@ elif page == "Learning Outcomes":
     total_out_count = len(df)
     assessed_count  = df["assessments"].notna().sum()
 
+    lo_export = df[["display_name", "short_description", "calculation_method",
+                    "assessments", "mastery_rate", "avg_score"]].rename(columns={
+        "display_name": "Code", "short_description": "Description",
+        "calculation_method": "Method", "assessments": "Assessments",
+        "mastery_rate": "Mastery %", "avg_score": "Avg Score %",
+    })
+
     # Hero + metrics
     col_hero, col_metrics = st.columns([2.2, 1])
     with col_hero:
-        hero_card(
+        _, lo_hero_filter = hero_card(
             eyebrow="CATALOG",
             title="Outcome Catalog",
-            subtitle=f"Browse, search, and analyze {total_out_count:,} institutional learning outcomes. {assessed_count:,} have assessment data.",
+            subtitle=f"Browse, search, and analyze {total_out_count:,} institutional learning outcomes. {assessed_count:,} have assessment data.{filter_label()}",
             primary_cta="📥 Export",
             primary_key="lo_export",
             secondary_cta="🔍 Filter",
             secondary_key="lo_filter",
+            primary_download={
+                "data": df_to_csv_bytes(lo_export),
+                "file_name": "learning_outcomes.csv",
+            },
         )
+    if lo_hero_filter:
+        # "Filter" → jump to the searchable Table view.
+        nav_to(lo_subtab="Table")
     with col_metrics:
         metric_glass("Total Outcomes", f"{total_out_count:,}", icon="📋", icon_bg=PASTEL_BLUE)
         assessed_pct = round(assessed_count / total_out_count * 100) if total_out_count else 0
@@ -1617,9 +1917,15 @@ elif page == "Learning Outcomes":
 
     action_button_row([
         {"label": "Refresh", "icon": "🔄", "icon_bg": PASTEL_BLUE,   "key": "lo_refresh",  "callback": lambda: (st.cache_data.clear(), st.rerun())},
-        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "lo_export2",  "callback": None},
-        {"label": "Filter",  "icon": "🔍", "icon_bg": PASTEL_YELLOW, "key": "lo_filter2",  "callback": None},
-        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "lo_reset",    "callback": None},
+        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "lo_export2",
+         "download": {"data": df_to_csv_bytes(lo_export),
+                      "file_name": "learning_outcomes.csv"}},
+        {"label": "Filter",  "icon": "🔍", "icon_bg": PASTEL_YELLOW, "key": "lo_filter2",
+         "callback": lambda: nav_to(lo_subtab="Table")},
+        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "lo_reset",
+         "callback": lambda: reset_page_filters(
+             ["lo_subtab", "lo_header_search", "lo_top_n",
+              "college_filter", "date_filter_label"])},
     ])
 
 
@@ -1643,7 +1949,11 @@ elif page == "Course Performance":
                                   key="cp_sort_by")
 
     with st.spinner("Loading courses…"):
-        df_cp = course_performance(min_students)
+        # Honor the sidebar college filter (scoped in-query so LIMIT applies after).
+        df_cp = course_performance(
+            min_students,
+            tuple(selected_account_ids) if college_filter_active else (),
+        )
 
     if search_val:
         df_cp = df_cp[
@@ -1655,18 +1965,30 @@ elif page == "Course Performance":
     n_courses  = len(df_cp)
     med_mastery_cp = round(df_cp["mastery_rate"].median(), 1) if not df_cp.empty else 0
 
+    cp_export = df_cp[["name", "course_code", "students", "assessments",
+                       "mastery_rate", "avg_score"]].copy()
+    cp_export.columns = ["Course", "Code", "Students", "Assessments",
+                         "Mastery %", "Avg Score %"]
+
     # Hero + metrics
     col_hero, col_metrics = st.columns([2.2, 1])
     with col_hero:
-        hero_card(
+        _, cp_hero_filter = hero_card(
             eyebrow="PERFORMANCE",
             title="Course Performance Dashboard",
-            subtitle=f"Mastery rates and enrolment across {n_courses:,} courses with results.",
+            subtitle=f"Mastery rates and enrolment across {n_courses:,} courses with results.{filter_label()}",
             primary_cta="📥 Export",
             primary_key="cp_export",
             secondary_cta="🔍 Filter",
             secondary_key="cp_filter",
+            primary_download={
+                "data": df_to_csv_bytes(cp_export),
+                "file_name": "course_performance.csv",
+            },
         )
+    if cp_hero_filter:
+        # "Filter" → jump to the searchable Table view.
+        nav_to(cp_subtab="Table")
     with col_metrics:
         metric_glass("Courses", f"{n_courses:,}", icon="📚", icon_bg=PASTEL_BLUE)
         metric_glass("Median Mastery", f"{med_mastery_cp}%", icon="🎯", icon_bg=PASTEL_MINT)
@@ -1702,16 +2024,19 @@ elif page == "Course Performance":
 
     if subtab == "Scatter" or subtab is None:
         st.caption(f"{n_courses:,} courses matched")
-        fig = px.scatter(
-            df_cp.head(200), x="students", y="mastery_rate", size="assessments",
-            color="avg_score", color_continuous_scale=CHART_DIVERGING, range_color=[0, 100],
-            hover_name="name", hover_data={"course_code": True},
-            labels={"students": "# Students", "mastery_rate": "Mastery %",
-                    "avg_score": "Avg Score %"},
-            title="Course Mastery vs. Enrolment (top 200)",
-        )
-        apply_chart_theme(fig, height=460)
-        st.plotly_chart(fig, use_container_width=True)
+        if df_cp.empty:
+            st.info("No courses match the current filters.")
+        else:
+            fig = px.scatter(
+                df_cp.head(200), x="students", y="mastery_rate", size="assessments",
+                color="avg_score", color_continuous_scale=CHART_DIVERGING, range_color=[0, 100],
+                hover_name="name", hover_data={"course_code": True},
+                labels={"students": "# Students", "mastery_rate": "Mastery %",
+                        "avg_score": "Avg Score %"},
+                title="Course Mastery vs. Enrolment (top 200)",
+            )
+            apply_chart_theme(fig, height=460)
+            st.plotly_chart(fig, use_container_width=True)
 
     elif subtab == "Table":
         st.caption(f"{n_courses:,} courses matched")
@@ -1722,9 +2047,15 @@ elif page == "Course Performance":
 
     action_button_row([
         {"label": "Refresh", "icon": "🔄", "icon_bg": PASTEL_BLUE,   "key": "cp_refresh",  "callback": lambda: (st.cache_data.clear(), st.rerun())},
-        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "cp_export2",  "callback": None},
-        {"label": "Filter",  "icon": "🔍", "icon_bg": PASTEL_YELLOW, "key": "cp_filter2",  "callback": None},
-        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "cp_reset",    "callback": None},
+        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "cp_export2",
+         "download": {"data": df_to_csv_bytes(cp_export),
+                      "file_name": "course_performance.csv"}},
+        {"label": "Filter",  "icon": "🔍", "icon_bg": PASTEL_YELLOW, "key": "cp_filter2",
+         "callback": lambda: nav_to(cp_subtab="Table")},
+        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "cp_reset",
+         "callback": lambda: reset_page_filters(
+             ["cp_subtab", "cp_header_search", "cp_min_students", "cp_sort_by",
+              "college_filter", "date_filter_label"])},
     ])
 
 
@@ -1741,16 +2072,23 @@ elif page == "Student Mastery":
         search_key="sm_header_search"
     )
 
+    # Holds the selected student's results once a student is chosen; used by the
+    # bottom Export/Reset action row.
+    sr = None
+    sr_export = pd.DataFrame()
+
     # Hero card
     col_hero, col_metrics = st.columns([2.2, 1])
     with col_hero:
-        hero_card(
+        sm_hero_search, _ = hero_card(
             eyebrow="LOOKUP",
             title="Student Mastery Lookup",
             subtitle="Search a student to see their full outcome assessment history and mastery timeline.",
             primary_cta="🔍 Search",
             primary_key="sm_search_btn",
         )
+    if sm_hero_search:
+        st.toast("Type a student's name in the search box below.")
     with col_metrics:
         metric_glass("Search Students", "Enter name below", icon="👤", icon_bg=PASTEL_BLUE)
 
@@ -1777,6 +2115,13 @@ elif page == "Student Mastery":
 
             with st.spinner("Loading results…"):
                 sr = student_results(uid)
+
+            # Honor the sidebar college filter (scope to results in selected colleges).
+            if college_filter_active and not sr.empty:
+                course_ids = set(courses_in_accounts(tuple(selected_account_ids))["id"])
+                sr = sr[sr["context_id"].isin(course_ids)]
+
+            sr_export = sr.copy()
 
             total    = len(sr)
             mastered = (sr["mastery"] == "t").sum()
@@ -1874,9 +2219,25 @@ elif page == "Student Mastery":
                                  "Pct %", "Mastered", "Assessed At"]
                 st.dataframe(show2, use_container_width=True, height=420)
 
-    action_button_row([
+    sm_actions = [
         {"label": "Refresh", "icon": "🔄", "icon_bg": PASTEL_BLUE,   "key": "sm_refresh",  "callback": lambda: (st.cache_data.clear(), st.rerun())},
-        {"label": "Export",  "icon": "📥", "icon_bg": PASTEL_PEACH,  "key": "sm_export",   "callback": None},
-        {"label": "History", "icon": "📅", "icon_bg": PASTEL_YELLOW, "key": "sm_history",  "callback": None},
-        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "sm_reset",    "callback": None},
-    ])
+    ]
+    if not sr_export.empty:
+        sm_actions.append(
+            {"label": "Export", "icon": "📥", "icon_bg": PASTEL_PEACH, "key": "sm_export",
+             "download": {"data": df_to_csv_bytes(sr_export),
+                          "file_name": "student_results.csv"}})
+    else:
+        # No student loaded yet — Export informs the user instead of downloading nothing.
+        sm_actions.append(
+            {"label": "Export", "icon": "📥", "icon_bg": PASTEL_PEACH, "key": "sm_export",
+             "callback": lambda: st.toast("Select a student first to export their results.")})
+    sm_actions += [
+        {"label": "History", "icon": "📅", "icon_bg": PASTEL_YELLOW, "key": "sm_history",
+         "callback": lambda: nav_to(sm_subtab="History")},
+        {"label": "Reset",   "icon": "↺",  "icon_bg": PASTEL_LILAC,  "key": "sm_reset",
+         "callback": lambda: reset_page_filters(
+             ["sm_subtab", "sm_header_search", "sm_search", "sm_select",
+              "college_filter", "date_filter_label"])},
+    ]
+    action_button_row(sm_actions)
